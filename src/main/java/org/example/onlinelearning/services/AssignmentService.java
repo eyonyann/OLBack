@@ -65,11 +65,13 @@ public class AssignmentService {
         assignmentRepository.deleteById(id);
     }
 
-    public List<AssignmentDTO> getAllAssignmentsByLessonId(Long lessonId) {
-        List<Assignment> assignments = assignmentRepository.findByLessonId(lessonId);
-        return assignments.stream()
-                .map(assignmentMapper::toAssignmentDTO)
-                .toList();
+
+    public AssignmentDTO getAssignmentByLessonId(Long lessonId) {
+        // Получаем Optional<Assignment> из репозитория
+        Assignment assignment = assignmentRepository.findByLessonId(lessonId)
+                .orElseThrow(() -> new NotFoundException("Assignment not found for lesson id: " + lessonId));
+
+        return assignmentMapper.toAssignmentDTO(assignment);
     }
 
     public Assignment getAssignmentEntityById(Long id) {

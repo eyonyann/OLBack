@@ -1,15 +1,19 @@
 package org.example.onlinelearning.services;
 
 import lombok.RequiredArgsConstructor;
+import org.example.onlinelearning.dtos.AnswerDTO;
 import org.example.onlinelearning.dtos.SubmissionDTO;
 import org.example.onlinelearning.exceptions.NotFoundException;
 import org.example.onlinelearning.mappers.SubmissionMapper;
 import org.example.onlinelearning.models.Submission;
 import org.example.onlinelearning.repositories.SubmissionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class SubmissionService {
@@ -70,5 +74,21 @@ public class SubmissionService {
             throw new NotFoundException("Submission not found with id: " + id);
         }
         submissionRepository.deleteById(id);
+    }
+
+    public Submission findLatestSubmission(Long userId, Long courseId) {
+        Pageable pageable = PageRequest.of(0, 1);
+        List<Submission> submissions = submissionRepository.findLatestByUserIdAndCourseId(
+                userId,
+                courseId,
+                pageable
+        );
+        return submissions.isEmpty() ? null : submissions.get(0);
+    }
+
+    public SubmissionDTO getUserSubmissionForAssignment(Long assignmentId, Long userId) {
+        return submissionRepository.findByAssignmentIdAndUserId(assignmentId, userId)
+                .map(submissionMapper::toSubmissionDTO)
+                .orElseThrow(() -> new NotFoundException("Submission not found for assignment and user"));
     }
 }

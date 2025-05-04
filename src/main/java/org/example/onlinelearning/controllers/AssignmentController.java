@@ -65,14 +65,14 @@ public class AssignmentController {
         }
     }
 
-    @GetMapping("/lessons/{lesson_id}/assignments")
-    public ResponseEntity<?> getAllAssignmentsByLessonId(@PathVariable("lesson_id") Long lessonId) {
+    @GetMapping("/lessons/{lessonId}/assignment")
+    public ResponseEntity<?> getAssignmentForLesson(@PathVariable Long lessonId) {
         try {
-            List<AssignmentDTO> assignments = assignmentService.getAllAssignmentsByLessonId(lessonId);
-            return ResponseEntity.ok(assignments);
+            AssignmentDTO assignmentDTO = assignmentService.getAssignmentByLessonId(lessonId);
+            return ResponseEntity.ok(assignmentDTO);
         } catch (NotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Lesson not found", e.getMessage()));
+                    .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Assignment not found", e.getMessage()));
         }
     }
 }

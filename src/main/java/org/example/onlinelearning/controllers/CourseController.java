@@ -22,7 +22,10 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -38,30 +41,30 @@ public class CourseController {
         return ResponseEntity.ok(courses);
     }
 
-    @GetMapping(value = "/images", produces = "application/zip")
-    public ResponseEntity<Resource> getAllCoursesImagesAsZip() throws IOException {
+    @GetMapping(value = "/images", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, String>> getAllCoursesImagesAsBase64() throws IOException {
         List<CourseDTO> courses = courseService.getAllCourses();
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ZipOutputStream zos = new ZipOutputStream(baos);
+        Map<String, String> imageMap = new HashMap<>();
 
         for (CourseDTO course : courses) {
             Path imagePath = Paths.get(course.getImagePath());
-            ZipEntry entry = new ZipEntry(course.getId() + "_image.jpg");
-            zos.putNextEntry(entry);
-            Files.copy(imagePath, zos);
-            zos.closeEntry();
+            if (Files.exists(imagePath)) {
+                try {
+                    byte[] imageBytes = Files.readAllBytes(imagePath);
+                    String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+                    imageMap.put(course.getId().toString(), base64Image);
+                } catch (IOException e) {
+                    // Логирование ошибки чтения файла
+                    System.err.println("Error reading image for course " + course.getId() + ": " + e.getMessage());
+                }
+            } else {
+                System.err.println("Image not found for course: " + course.getId());
+            }
         }
-        zos.finish();
-
-        byte[] zipBytes = baos.toByteArray();
-        InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(zipBytes));
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=courses_images.zip")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(zipBytes.length)
-                .body(resource);
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(imageMap);
     }
 
     @GetMapping("/{id}")
