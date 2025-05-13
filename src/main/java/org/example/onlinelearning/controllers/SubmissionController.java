@@ -3,14 +3,20 @@ package org.example.onlinelearning.controllers;
 import lombok.RequiredArgsConstructor;
 import org.example.onlinelearning.config.JwtTokenProvider;
 import org.example.onlinelearning.dtos.AnswerDTO;
+import org.example.onlinelearning.dtos.AssignmentDTO;
+import org.example.onlinelearning.dtos.LogDTO;
 import org.example.onlinelearning.exceptions.ErrorResponse;
 import org.example.onlinelearning.dtos.SubmissionDTO;
 import org.example.onlinelearning.exceptions.NotFoundException;
+import org.example.onlinelearning.services.AssignmentService;
+import org.example.onlinelearning.services.LogService;
 import org.example.onlinelearning.services.SubmissionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api")
@@ -18,6 +24,13 @@ import org.springframework.web.bind.annotation.*;
 public class SubmissionController {
     @Autowired
     private SubmissionService submissionService;
+
+    @Autowired
+    private LogService logService;
+
+    @Autowired
+    private AssignmentService assignmentService;
+
 
     @Autowired
     JwtTokenProvider jwtTokenProvider;
@@ -53,13 +66,44 @@ public class SubmissionController {
     @PostMapping("/assignments/{assignment_id}/submissions")
     public ResponseEntity<?> createSubmission(
             @PathVariable("assignment_id") Long assignmentId,
-            @RequestBody SubmissionDTO submissionDTO) {
+            @RequestBody SubmissionDTO submissionDTO,
+            @RequestHeader("Authorization") String authHeader) {
         try {
+            // Получаем данные пользователя
+            String token = authHeader.substring(7);
+            Long userId = jwtTokenProvider.getUserId(token);
+            String username = jwtTokenProvider.getUsername(token);
+
+            // Создаем отправку задания
             SubmissionDTO createdSubmission = submissionService.createSubmission(assignmentId, submissionDTO);
+
+            // Получаем информацию о задании
+            AssignmentDTO assignment = assignmentService.getAssignmentById(assignmentId);
+
+            // Логируем действие
+            LogDTO logDTO = new LogDTO();
+            logDTO.setUserId(userId);
+            logDTO.setTitle(String.format(
+                    "Оценил задание [ID:%d] '%s' (пользователь: %s)",
+                    assignmentId,
+                    assignment.getTitle(),
+                    username
+            ));
+            logDTO.setLogTime(LocalDateTime.now());
+            logService.saveLog(logDTO);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(createdSubmission);
+
         } catch (NotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Resource not found", e.getMessage()));
+                    .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(),
+                            "Resource not found",
+                            e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                            "Submission failed",
+                            "Internal server error"));
         }
     }
 

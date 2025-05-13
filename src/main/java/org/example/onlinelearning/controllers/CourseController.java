@@ -1,10 +1,14 @@
 package org.example.onlinelearning.controllers;
 
 import jakarta.validation.Valid;
+import org.example.onlinelearning.config.JwtTokenProvider;
 import org.example.onlinelearning.dtos.CourseDTO;
+import org.example.onlinelearning.dtos.LogDTO;
 import org.example.onlinelearning.exceptions.InvalidRequestException;
+import org.example.onlinelearning.exceptions.NotFoundException;
 import org.example.onlinelearning.models.Course;
 import org.example.onlinelearning.services.CourseService;
+import org.example.onlinelearning.services.LogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -22,6 +26,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +39,12 @@ import java.util.zip.ZipOutputStream;
 public class CourseController {
     @Autowired
     private CourseService courseService;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private LogService logService;
 
     @GetMapping("")
     public ResponseEntity<List<CourseDTO>> getAllCourses() {
@@ -93,21 +104,44 @@ public class CourseController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CourseDTO> createCourse(
             @RequestPart("courseData") @Valid CourseDTO courseDTO,
-            @RequestPart(value = "image", required = false) MultipartFile image) {
+            @RequestPart(value = "image", required = false) MultipartFile image,
+            @RequestHeader("Authorization") String authHeader) {
 
-        // Добавить валидацию
-        if (image == null || image.isEmpty()) {
-            throw new InvalidRequestException("Image is required");
+        try {
+            // Получаем ID пользователя из токена
+            String token = authHeader.substring(7);
+            Long userId = jwtTokenProvider.getUserId(token);
+
+            // Валидация изображения
+            if (image == null || image.isEmpty()) {
+                throw new InvalidRequestException("Image is required");
+            }
+
+            // Создание курса
+            CourseDTO savedCourse = courseService.createCourse(courseDTO, image);
+
+            // Логирование действия
+            LogDTO logDTO = new LogDTO();
+            logDTO.setUserId(userId);
+            logDTO.setTitle(String.format(
+                    "Создал курс " + savedCourse.getId() + " " + savedCourse.getTitle()
+            ));
+            logDTO.setLogTime(LocalDateTime.now());
+            logService.saveLog(logDTO);
+
+            // Формирование ответа
+            URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .path("/{id}")
+                    .buildAndExpand(savedCourse.getId())
+                    .toUri();
+
+            return ResponseEntity.created(location).body(savedCourse);
+
+        } catch (InvalidRequestException | NotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Course creation failed", e);
         }
-
-        CourseDTO savedCourse = courseService.createCourse(courseDTO, image);
-
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(savedCourse.getId())
-                .toUri();
-
-        return ResponseEntity.created(location).body(savedCourse);
     }
 
     @PutMapping("/{id}")

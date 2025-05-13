@@ -2,14 +2,17 @@ package org.example.onlinelearning.controllers;
 
 import org.example.onlinelearning.config.JwtTokenProvider;
 import org.example.onlinelearning.dtos.AnswerDTO;
+import org.example.onlinelearning.dtos.LogDTO;
 import org.example.onlinelearning.exceptions.ErrorResponse;
 import org.example.onlinelearning.exceptions.NotFoundException;
 import org.example.onlinelearning.services.AnswerService;
+import org.example.onlinelearning.services.LogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -19,7 +22,10 @@ public class AnswerController {
     private AnswerService answerService;
 
     @Autowired
-    JwtTokenProvider jwtTokenProvider;
+    private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private LogService logService;
 
     @GetMapping("/assignments/{assignmentId}/answers")
     public ResponseEntity<?> getAllAnswersByAssignmentId(@PathVariable Long assignmentId) {
@@ -52,13 +58,29 @@ public class AnswerController {
     @PostMapping("/assignments/{assignmentId}/answers")
     public ResponseEntity<?> createAnswer(
             @PathVariable Long assignmentId,
-            @RequestBody AnswerDTO answerDTO) {
+            @RequestBody AnswerDTO answerDTO,
+            @RequestHeader("Authorization") String authHeader) {
         try {
+            // Получаем ID пользователя из токена
+            String token = authHeader.substring(7);
+            Long userId = jwtTokenProvider.getUserId(token);
+
+            // Создаем ответ
             AnswerDTO createdAnswer = answerService.createAnswer(assignmentId, answerDTO);
+
+            // Логируем действие
+            LogDTO logDTO = new LogDTO();
+            logDTO.setUserId(userId);
+            logDTO.setTitle("Создал ответ " + createdAnswer.getContent() + " на вопрос задания с id " + createdAnswer.getAssignmentId());
+            logDTO.setLogTime(LocalDateTime.now());
+            logService.saveLog(logDTO);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(createdAnswer);
         } catch (NotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Assignment not found", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
         }
     }
 
